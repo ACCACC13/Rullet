@@ -1,482 +1,452 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>점심 메뉴 룰렛</title>
+  <style>
+    /* 기본 스타일 */
+    body {
+      background: #fff;
+      color: #222;
+      font-family: 'Segoe UI', 'Apple SD Gothic Neo', Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 420px;
+      margin: 0 auto;
+      padding: 16px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .title {
+      font-size: 1.7rem;
+      font-weight: bold;
+      margin: 20px 0 10px 0;
+      text-align: center;
+    }
+    .wheel-wrap {
+      position: relative;
+      margin-bottom: 18px;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+    }
+    .pointer {
+      position: absolute;
+      top: -14px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+    }
+    .spin-btn {
+      margin-bottom: 18px;
+      padding: 12px 32px;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 1.1rem;
+      font-weight: bold;
+      border: none;
+      background: #4299e1;
+      box-shadow: 0 2px 6px #0002;
+      transition: background 0.15s;
+      width: 80%;
+      max-width: 270px;
+      cursor: pointer;
+    }
+    .spin-btn:active {
+      background: #2b6cb0;
+    }
+    .spin-btn[disabled] {
+      background: #a0aec0;
+      cursor: not-allowed;
+    }
+    .add-section, .duration-section {
+      width: 100%;
+      margin-bottom: 14px;
+      padding: 0 6px;
+    }
+    .add-title, .duration-title {
+      font-size: 1.08rem;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    .add-row {
+      display: flex;
+    }
+    .add-input {
+      flex: 1;
+      padding: 12px;
+      border: 1px solid #cbd5e0;
+      border-radius: 8px 0 0 8px;
+      font-size: 1rem;
+      outline: none;
+    }
+    .add-btn {
+      background: #48bb78;
+      color: #fff;
+      font-weight: bold;
+      border: none;
+      padding: 12px 18px;
+      border-radius: 0 8px 8px 0;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .add-btn:active { background: #276749; }
+    .duration-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .hint {
+      font-size: 0.93rem;
+      color: #6b7280;
+      text-align: center;
+      margin-top: 12px;
+    }
+    .confetti-piece {
+      position: absolute;
+      border-radius: 50%;
+      opacity: 0.85;
+      z-index: 100;
+      pointer-events: none;
+    }
+    /* 팝업 스타일 */
+    .popup-bg {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 500;
+    }
+    .popup {
+      background: #fff;
+      border-radius: 18px;
+      padding: 28px 18px;
+      max-width: 330px;
+      width: 85vw;
+      text-align: center;
+      box-shadow: 0 4px 20px #0003;
+      animation: popIn 0.3s;
+    }
+    @keyframes popIn {
+      0% { transform: scale(0.7); opacity: 0; }
+      70% { transform: scale(1.08); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .popup-menu {
+      background: #fefcbf;
+      border-radius: 12px;
+      font-size: 2.2rem;
+      font-weight: bold;
+      margin-bottom: 14px;
+      padding: 14px;
+      letter-spacing: 1px;
+    }
+    .popup-btn {
+      background: #4299e1;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 0;
+      font-size: 1.1rem;
+      font-weight: bold;
+      width: 100%;
+      margin-top: 7px;
+      cursor: pointer;
+      transition: background 0.16s;
+    }
+    .popup-btn:active { background: #2b6cb0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="title">오늘의 점심 메뉴는?</div>
+    <div class="wheel-wrap" style="width:100%;">
+      <div class="pointer">
+        <svg width="22" height="22">
+          <polygon points="11,22 0,5 22,5" fill="red"/>
+        </svg>
+      </div>
+      <div id="roulette-root" style="touch-action:none;user-select:none;"></div>
+      <div id="confetti-root" style="position:absolute;top:0;left:0;width:100%;height:100%;overflow:hidden;pointer-events:none;"></div>
+    </div>
+    <button id="spin-btn" class="spin-btn">룰렛 돌리기</button>
 
-const LunchRoulette = () => {
-  const defaultMenus = ['비빔밥', '김치찌개', '된장찌개', '불고기', '짜장면', '짬뽕', '초밥', '라멘'];
-  const COLORS = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#7CFC00', '#FF6347'];
+    <div class="add-section">
+      <div class="add-title">메뉴 추가</div>
+      <div class="add-row">
+        <input type="text" id="add-input" class="add-input" placeholder="새 메뉴 입력" autocomplete="off" />
+        <button class="add-btn" id="add-btn">추가</button>
+      </div>
+    </div>
+    <div class="duration-section">
+      <div class="duration-title">회전 시간 설정 (초)</div>
+      <div class="duration-row">
+        <span id="duration-label">5초</span>
+        <input type="range" min="2" max="10" value="5" id="duration-range" style="flex:1;height:18px;" />
+      </div>
+    </div>
+    <div class="hint">원하지 않는 메뉴는 파이를 터치하여 제거할 수 있습니다.</div>
+  </div>
+  <div id="popup-root"></div>
+  <script>
+    // ===== 데이터 및 상수 =====
+    const defaultMenus = ['비빔밥','김치찌개','된장찌개','불고기','짜장면','짬뽕','초밥','라멘'];
+    const COLORS = ['#FF6384','#36A2EB','#FFCE56','#4BC0C0','#9966FF','#FF9F40','#7CFC00','#FF6347'];
 
-  // 상태 관리
-  const [menus, setMenus] = useState(() => {
-    const saved = localStorage.getItem('lunchMenus');
-    return saved ? JSON.parse(saved) : defaultMenus;
-  });
-  const [customMenu, setCustomMenu] = useState('');
-  const [rotation, setRotation] = useState(0);
-  const [isSpinning, setIsSpinning] = useState(false);
-  const [selectedMenu, setSelectedMenu] = useState(null);
-  const [showPopup, setShowPopup] = useState(false);
-  const [confetti, setConfetti] = useState([]);
-  const [spinDuration, setSpinDuration] = useState(5);
-  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 375);
-  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 768 : true);
-  
-  // refs
-  const animationRef = useRef(null);
-  const startTimeRef = useRef(null);
-  const endRotationRef = useRef(null);
-  const inputRef = useRef(null);
-  
-  // 반응형 처리
-  useEffect(() => {
-    // 모바일 뷰포트 메타 태그 설정
-    const metaViewport = document.querySelector('meta[name=viewport]');
-    if (!metaViewport) {
-      const meta = document.createElement('meta');
-      meta.name = 'viewport';
-      meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-      document.getElementsByTagName('head')[0].appendChild(meta);
-    } else {
-      metaViewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+    let menus = [];
+    let customMenu = '';
+    let rotation = 0;
+    let isSpinning = false;
+    let selectedMenu = null;
+    let spinDuration = 5;
+    let confetti = [];
+    let animationRef = null;
+    let startTimeRef = null;
+    let endRotationRef = null;
+
+    const storageKey = 'lunchMenus';
+    const rouletteRoot = document.getElementById('roulette-root');
+    const confettiRoot = document.getElementById('confetti-root');
+    const popupRoot = document.getElementById('popup-root');
+    const addInput = document.getElementById('add-input');
+    const spinBtn = document.getElementById('spin-btn');
+    const addBtn = document.getElementById('add-btn');
+    const durationRange = document.getElementById('duration-range');
+    const durationLabel = document.getElementById('duration-label');
+
+    // ====== 상태 관리 ======
+    function saveMenus() {
+      localStorage.setItem(storageKey, JSON.stringify(menus));
     }
-    
-    const handleResize = () => {
-      const width = window.innerWidth;
-      setWindowWidth(width);
-      setIsMobile(width < 768);
-    };
-    
-    // 디바이스 방향 변경 감지
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('orientationchange', handleResize);
-    
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('orientationchange', handleResize);
-    };
-  }, []);
-  
-  // 모바일에서 가상 키보드가 올라올 때 화면 조정
-  useEffect(() => {
-    const handleFocus = () => {
-      // 입력창에 포커스가 갔을 때 스크롤 조정
-      setTimeout(() => {
-        if (inputRef.current) {
-          inputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      }, 300);
-    };
-    
-    const input = inputRef.current;
-    if (input && isMobile) {
-      input.addEventListener('focus', handleFocus);
-      return () => input.removeEventListener('focus', handleFocus);
+    function loadMenus() {
+      const saved = localStorage.getItem(storageKey);
+      menus = saved ? JSON.parse(saved) : defaultMenus.slice();
     }
-  }, [isMobile, inputRef.current]);
-  
-  // 메뉴 변경시 localStorage 업데이트
-  useEffect(() => {
-    localStorage.setItem('lunchMenus', JSON.stringify(menus));
-  }, [menus]);
-  
-  // 컴포넌트 언마운트 시 애니메이션 정리
-  useEffect(() => {
-    return () => {
-      if (animationRef.current) cancelAnimationFrame(animationRef.current);
-    };
-  }, []);
-  
-  // 메뉴 추가 함수
-  const addMenu = () => {
-    const trimmed = customMenu.trim();
-    if (trimmed && !menus.includes(trimmed)) {
-      setMenus([...menus, trimmed]);
-      setCustomMenu('');
-      
-      // 모바일에서 입력 후 키보드 닫기
-      if (isMobile && inputRef.current) {
-        inputRef.current.blur();
+
+    // ====== 룰렛 SVG 렌더 ======
+    function renderWheel() {
+      // 사이즈 계산 (모바일 대응)
+      const width = Math.min(window.innerWidth * 0.9, window.innerWidth < 768 ? 320 : 360);
+      const height = width;
+      const center = width/2;
+      const radius = center * 0.85;
+      const sectorAngle = 360 / menus.length;
+
+      // SVG 생성
+      let svg = `<svg width="${width}" height="${height}" style="display:block;">`;
+      for(let i=0;i<menus.length;i++) {
+        const startAngle = i*sectorAngle, endAngle=(i+1)*sectorAngle;
+        const startRad = (startAngle-90)*Math.PI/180, endRad=(endAngle-90)*Math.PI/180;
+        const x1=center+radius*Math.cos(startRad), y1=center+radius*Math.sin(startRad);
+        const x2=center+radius*Math.cos(endRad), y2=center+radius*Math.sin(endRad);
+        const largeArc = sectorAngle>180?1:0;
+        const pathData = `M ${center} ${center} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+
+        // 텍스트 위치
+        const midAngle = ((startAngle+endAngle)/2-90)*Math.PI/180;
+        const tx=center+radius*0.6*Math.cos(midAngle), ty=center+radius*0.6*Math.sin(midAngle);
+
+        // 폰트 및 줄임
+        let displayMenu = menus[i];
+        let maxLen = Math.floor(8 - menus.length/3);
+        if (window.innerWidth<768 && displayMenu.length>maxLen) displayMenu = displayMenu.substring(0, maxLen-1) + '..';
+
+        svg += `
+          <g>
+            <path d="${pathData}" fill="${COLORS[i%COLORS.length]}" style="cursor:pointer;" data-index="${i}" />
+            <text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="middle" fill="white" font-size="${window.innerWidth<768? (window.innerWidth<360?10:12):14}" font-weight="bold" pointer-events="none"
+              transform="rotate(${(startAngle+endAngle)/2-90},${tx},${ty})">${displayMenu}</text>
+          </g>
+        `;
       }
-    }
-  };
-  
-  // 메뉴 삭제 함수
-  const removeMenu = (index) => {
-    if (menus.length <= 2) {
-      // 모바일 최적화된 경고창
-      if (isMobile) {
-        // 진동 피드백 (지원되는 기기에서)
-        if ('vibrate' in navigator) {
-          navigator.vibrate(100);
-        }
-      }
-      
-      alert('최소 2개의 메뉴가 필요합니다.');
-      return;
-    }
-    
-    // 진동 피드백 (지원되는 기기에서)
-    if (isMobile && 'vibrate' in navigator) {
-      navigator.vibrate(50);
-    }
-    
-    const newMenus = [...menus];
-    newMenus.splice(index, 1);
-    setMenus(newMenus);
-  };
-  
-  // 룰렛 스핀 함수
-  const spinRoulette = () => {
-    if (isSpinning || menus.length < 2) return;
-    
-    // 진동 피드백 (지원되는 기기에서)
-    if (isMobile && 'vibrate' in navigator) {
-      navigator.vibrate([50, 30, 100]);
-    }
-    
-    setIsSpinning(true);
-    setSelectedMenu(null);
-    setShowPopup(false);
-    setConfetti([]);
-    
-    // 2~5회전 + 랜덤한 각도
-    const additionalRotation = 720 + 1080 * Math.random();
-    endRotationRef.current = rotation + additionalRotation;
-    
-    if (animationRef.current) cancelAnimationFrame(animationRef.current);
-    
-    const animate = (timestamp) => {
-      if (!startTimeRef.current) startTimeRef.current = timestamp;
-      
-      const elapsed = timestamp - startTimeRef.current;
-      const progress = Math.min(elapsed / (spinDuration * 1000), 1);
-      
-      // 이징 함수
-      const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
-      
-      if (progress < 1) {
-        // 회전 진행 중
-        const currentRotation = rotation + (endRotationRef.current - rotation) * easeOutQuint(progress);
-        setRotation(currentRotation);
-        animationRef.current = requestAnimationFrame(animate);
-      } else {
-        // 회전 완료
-        setRotation(endRotationRef.current);
-        setIsSpinning(false);
-        
-        // 선택된 메뉴 계산
-        const sectorAngle = 360 / menus.length;
-        const normalizedRotation = endRotationRef.current % 360;
-        const selectedIndex = Math.floor(((360 - normalizedRotation) % 360) / sectorAngle);
-        const selected = menus[selectedIndex];
-        setSelectedMenu(selected);
-        
-        // 폭죽 생성
-        createConfetti();
-        
-        // 팝업 표시
-        setTimeout(() => {
-          setShowPopup(true);
-        }, 300);
-        
-        // 결과 발표시 진동 피드백
-        if (isMobile && 'vibrate' in navigator) {
-          navigator.vibrate([50, 50, 100, 50, 100]);
-        }
-        
-        startTimeRef.current = null;
-      }
-    };
-    
-    animationRef.current = requestAnimationFrame(animate);
-  };
-  
-  // 폭죽 생성 함수
-  const createConfetti = () => {
-    const newConfetti = [];
-    const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
-    
-    // 30-50개 랜덤 폭죽 조각 생성
-    const pieces = Math.floor(Math.random() * 20) + 30;
-    
-    for (let i = 0; i < pieces; i++) {
-      newConfetti.push({
-        id: i,
-        x: 50 + Math.random() * 50 - 25, // 화면 중앙 근처에서 시작
-        y: 50 + Math.random() * 10,
-        size: Math.random() * 8 + 4,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        rotation: Math.random() * 360,
-        xVelocity: Math.random() * 20 - 10, // 좌우 속도
-        yVelocity: -(Math.random() * 10 + 5),  // 위로 향하는 속도
-        rotationVelocity: Math.random() * 10 - 5,
+      // 중앙 원
+      svg += `<circle cx="${center}" cy="${center}" r="${radius*0.07}" fill="#333" />`;
+      svg += `</svg>`;
+
+      rouletteRoot.innerHTML = svg;
+      rouletteRoot.style.width = `${width}px`;
+      rouletteRoot.style.height = `${height}px`;
+
+      // 파이 클릭 시 삭제
+      const paths = rouletteRoot.querySelectorAll('path');
+      paths.forEach(p => p.onclick = (e) => {
+        if(isSpinning) return;
+        const idx = parseInt(e.target.getAttribute('data-index'));
+        removeMenu(idx);
       });
     }
-    
-    setConfetti(newConfetti);
-    
-    // 폭죽 애니메이션
-    let frame = 0;
-    const animate = () => {
-      frame++;
-      
-      if (frame < 150) { // 약 2.5초 동안 애니메이션
-        setConfetti(prev => prev.map(piece => {
-          // 중력 적용
-          const yVelocity = piece.yVelocity + 0.2; 
-          return {
-            ...piece,
-            x: piece.x + piece.xVelocity * 0.1,
-            y: piece.y + yVelocity * 0.1,
-            rotation: (piece.rotation + piece.rotationVelocity) % 360,
-            yVelocity
-          };
-        }));
-        requestAnimationFrame(animate);
-      } else {
-        // 애니메이션 종료
-        setConfetti([]);
-      }
-    };
-    
-    requestAnimationFrame(animate);
-  };
-  
-  // 화면 크기에 따른 룰렛 크기 계산 - 모바일에 최적화
-  const wheelSize = useMemo(() => {
-    // 모바일에서는 화면 너비의 90%, 최대 320px
-    const size = Math.min(windowWidth * 0.9, isMobile ? 320 : 360);
-    return {
-      width: size,
-      height: size,
-      center: size / 2,
-      radius: (size / 2) * 0.85
-    };
-  }, [windowWidth, isMobile]);
-  
-  // 원형 판 렌더링
-  const renderWheel = () => {
-    const { center: centerX, center: centerY, radius, width, height } = wheelSize;
-    const sectorAngle = 360 / menus.length;
-    
-    return (
-      <svg width={width} height={height} className="relative">
-        {menus.map((menu, index) => {
-          // 섹터 각도 계산
-          const startAngle = index * sectorAngle;
-          const endAngle = (index + 1) * sectorAngle;
-          
-          // 각도를 라디안으로 변환
-          const startRad = (startAngle - 90) * Math.PI / 180;
-          const endRad = (endAngle - 90) * Math.PI / 180;
-          
-          // 원호 좌표 계산
-          const x1 = centerX + radius * Math.cos(startRad);
-          const y1 = centerY + radius * Math.sin(startRad);
-          const x2 = centerX + radius * Math.cos(endRad);
-          const y2 = centerY + radius * Math.sin(endRad);
-          
-          // SVG 패스 생성
-          const largeArcFlag = sectorAngle > 180 ? 1 : 0;
-          const pathData = `M ${centerX} ${centerY} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
-          
-          // 텍스트 위치 및 크기 계산
-          const midAngle = ((startAngle + endAngle) / 2 - 90) * Math.PI / 180;
-          const textDistance = radius * 0.6;
-          const textX = centerX + textDistance * Math.cos(midAngle);
-          const textY = centerY + textDistance * Math.sin(midAngle);
-          
-          // 모바일 최적화 폰트 크기
-          const fontSize = isMobile ? (windowWidth < 360 ? 10 : 12) : 14;
-          
-          // 모바일에서 긴 텍스트 처리
-          let displayMenu = menu;
-          if (isMobile) {
-            // 화면 크기와 섹터 수에 따라 텍스트 길이 동적 조정
-            const maxLength = Math.floor(8 - menus.length / 3);
-            if (menu.length > maxLength) {
-              displayMenu = menu.substring(0, maxLength - 1) + '..';
-            }
-          }
-          
-          return (
-            <g key={index}>
-              <path 
-                d={pathData} 
-                fill={COLORS[index % COLORS.length]} 
-                cursor="pointer"
-                onClick={() => !isSpinning && removeMenu(index)}
-              />
-              <text
-                x={textX}
-                y={textY}
-                textAnchor="middle"
-                dominantBaseline="middle"
-                fill="white"
-                fontWeight="bold"
-                fontSize={fontSize}
-                transform={`rotate(${(startAngle + endAngle) / 2 - 90}, ${textX}, ${textY})`}
-                pointerEvents="none"
-              >
-                {displayMenu}
-              </text>
-            </g>
-          );
-        })}
-        
-        {/* 중앙 원 */}
-        <circle cx={centerX} cy={centerY} r={radius * 0.07} fill="#333" />
-      </svg>
-    );
-  };
-  
-  return (
-    <div className="flex flex-col items-center p-2 max-w-md mx-auto min-h-screen bg-white">
-      {/* 상단 헤더 */}
-      <h1 className="text-xl sm:text-2xl font-bold mt-2 mb-3 text-center">오늘의 점심 메뉴는?</h1>
-      
-      {/* 룰렛 휠 컨테이너 */}
-      <div className="relative mb-3 w-full flex justify-center">
-        {/* 고정된 화살표 */}
-        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-2 z-10">
-          <svg width="20" height="20">
-            <polygon points="10,20 0,5 20,5" fill="red" />
-          </svg>
-        </div>
-        
-        {/* 회전하는 룰렛 */}
-        <div style={{ 
-          transform: `rotate(${rotation}deg)`, 
-          transition: isSpinning ? 'none' : 'transform 0.3s ease-out',
-          touchAction: 'none',  // 터치 동작 방지
-          WebkitTapHighlightColor: 'transparent', // 모바일에서 탭 효과 제거
-          userSelect: 'none' // 텍스트 선택 방지
-        }}>
-          {renderWheel()}
-        </div>
-        
-        {/* 폭죽 효과 */}
-        {confetti.length > 0 && (
-          <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
-            {confetti.map(piece => (
-              <div
-                key={piece.id}
-                className="absolute rounded-full"
-                style={{
-                  left: `${piece.x}%`,
-                  top: `${piece.y}%`,
-                  width: `${piece.size}px`,
-                  height: `${piece.size}px`,
-                  backgroundColor: piece.color,
-                  transform: `rotate(${piece.rotation}deg)`,
-                  opacity: 0.8,
-                  zIndex: 100,
-                }}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-      
-      {/* 스핀 버튼 - 모바일에서 더 크게 */}
-      <button
-        onClick={spinRoulette}
-        disabled={isSpinning || menus.length < 2}
-        className={`mb-3 py-3 px-6 rounded-lg text-white font-bold text-lg
-          ${isSpinning || menus.length < 2 ? 'bg-gray-400' : 'bg-blue-500 active:bg-blue-700'}
-          shadow-md w-4/5 sm:w-auto touch-manipulation`}
-        style={{ 
-          WebkitTapHighlightColor: 'transparent',
-          touchAction: 'manipulation' 
-        }}
-      >
-        {isSpinning ? '돌아가는 중...' : '룰렛 돌리기'}
-      </button>
-      
-      {/* 메뉴 추가 영역 */}
-      <div className="w-full mb-3 px-2">
-        <h2 className="text-lg sm:text-xl font-bold mb-1">메뉴 추가</h2>
-        <div className="flex">
-          <input
-            ref={inputRef}
-            type="text"
-            inputMode={isMobile ? "text" : undefined}
-            value={customMenu}
-            onChange={(e) => setCustomMenu(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && addMenu()}
-            placeholder="새 메뉴 입력"
-            className="flex-1 p-3 border border-gray-300 rounded-l-lg text-base"
-            style={{ 
-              WebkitAppearance: 'none', 
-              fontSize: isMobile ? '16px' : 'inherit' // iOS에서 확대 방지
-            }}
-          />
-          <button
-            onClick={addMenu}
-            className="bg-green-500 active:bg-green-700 text-white py-3 px-4 rounded-r-lg text-base touch-manipulation"
-            style={{ WebkitTapHighlightColor: 'transparent' }}
-          >
-            추가
-          </button>
-        </div>
-      </div>
-      
-      {/* 회전 시간 설정 - 모바일 최적화 */}
-      <div className="w-full mt-1 px-2">
-        <h2 className="text-lg sm:text-xl font-bold mb-1">회전 시간 설정 (초)</h2>
-        <div className="flex items-center">
-          <span className="mr-2">{spinDuration}초</span>
-          <input
-            type="range"
-            min="2"
-            max="10"
-            value={spinDuration}
-            onChange={(e) => setSpinDuration(parseInt(e.target.value))}
-            className="flex-1 h-10 rounded-lg"
-            style={{ 
-              WebkitAppearance: 'none',
-              appearance: 'none',
-              background: '#edf2f7',
-              height: '10px',
-              borderRadius: '5px'
-            }}
-          />
-        </div>
-      </div>
-      
-      {/* 힌트 메시지 */}
-      <div className="mt-3 text-sm text-gray-600 px-2 text-center">
-        <p>원하지 않는 메뉴는 파이를 터치하여 제거할 수 있습니다.</p>
-      </div>
-      
-      {/* 결과 팝업 */}
-      {showPopup && selectedMenu && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-40" onClick={() => setShowPopup(false)}>
-          <div 
-            className="bg-white rounded-lg p-5 shadow-xl max-w-xs w-4/5 text-center transform scale-100 transition-transform duration-300"
-            style={{ animation: 'popIn 0.3s ease-out' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="text-lg font-bold mb-2">오늘의 점심 메뉴</div>
-            <div className="text-3xl font-extrabold p-4 bg-yellow-100 rounded-lg mb-3">{selectedMenu}</div>
-            <p className="text-gray-600 mb-3">맛있게 드세요!</p>
-            <button 
-              className="bg-blue-500 text-white py-2 px-4 rounded-lg text-lg font-bold w-full"
-              onClick={() => setShowPopup(false)}
-            >
-              확인
-            </button>
-          </div>
-        </div>
-      )}
-      
-      <style jsx global>{`
-        @keyframes popIn {
-          0% { transform: scale(0.5); opacity: 0; }
-          70% { transform: scale(1.1); opacity: 1; }
-          100% { transform: scale(1); opacity: 1; }
-        }
-      `}</style>
-    </div>
-  );
-};
 
-export default LunchRoulette;
+    // ====== 메뉴 관리 ======
+    function addMenu() {
+      const val = addInput.value.trim();
+      if(val && !menus.includes(val)) {
+        menus.push(val);
+        saveMenus();
+        renderWheel();
+        addInput.value = '';
+        // 모바일이면 키보드 닫기
+        if(window.innerWidth < 768) addInput.blur();
+      }
+    }
+    function removeMenu(index) {
+      if(menus.length<=2) {
+        if(window.navigator.vibrate) window.navigator.vibrate(100);
+        alert('최소 2개의 메뉴가 필요합니다.');
+        return;
+      }
+      if(window.navigator.vibrate) window.navigator.vibrate(50);
+      menus.splice(index,1);
+      saveMenus();
+      renderWheel();
+    }
+
+    // ====== 룰렛 스핀 ======
+    function spinRoulette() {
+      if(isSpinning || menus.length<2) return;
+      if(window.navigator.vibrate) window.navigator.vibrate([50,30,100]);
+      isSpinning = true;
+      selectedMenu = null;
+      renderWheel();
+      confettiRoot.innerHTML = '';
+
+      // 회전량
+      const additional = 720 + 1080*Math.random();
+      endRotationRef = rotation + additional;
+
+      // 애니메이션
+      if(animationRef) cancelAnimationFrame(animationRef);
+      startTimeRef = null;
+
+      function animate(ts) {
+        if(!startTimeRef) startTimeRef = ts;
+        const elapsed = ts-startTimeRef;
+        const progress = Math.min(elapsed/(spinDuration*1000),1);
+        const ease = 1-Math.pow(1-progress,5);
+        if(progress<1) {
+          const curRot = rotation + (endRotationRef-rotation)*ease;
+          rouletteRoot.style.transform = `rotate(${curRot}deg)`;
+          animationRef = requestAnimationFrame(animate);
+        } else {
+          rotation = endRotationRef;
+          rouletteRoot.style.transform = `rotate(${rotation}deg)`;
+          isSpinning = false;
+          showResult();
+        }
+      }
+      animationRef = requestAnimationFrame(animate);
+    }
+
+    function showResult() {
+      // 섹터 계산
+      const sectorAngle = 360/menus.length;
+      const normalized = rotation%360;
+      const selIdx = Math.floor(((360-normalized)%360)/sectorAngle);
+      selectedMenu = menus[selIdx];
+
+      // confetti + 팝업
+      createConfetti();
+      setTimeout(()=>showPopup(), 320);
+      if(window.navigator.vibrate) window.navigator.vibrate([50,50,100,50,100]);
+    }
+
+    // ====== confetti ======
+    function createConfetti() {
+      let arr = [];
+      const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+      const pieces = Math.floor(Math.random()*20)+30;
+      for(let i=0;i<pieces;i++) {
+        arr.push({
+          id: i,
+          x: 50 + Math.random()*50 - 25,
+          y: 50 + Math.random()*10,
+          size: Math.random()*8+4,
+          color: colors[Math.floor(Math.random()*colors.length)],
+          rotation: Math.random()*360,
+          xVelocity: Math.random()*20-10,
+          yVelocity: -(Math.random()*10+5),
+          rotationVelocity: Math.random()*10-5
+        });
+      }
+      confetti = arr;
+      renderConfetti();
+      // 애니메이션
+      let frame=0;
+      function animate() {
+        frame++;
+        if(frame<150) {
+          confetti=confetti.map(p=>{
+            const yVel = p.yVelocity+0.2;
+            return {
+              ...p,
+              x: p.x + p.xVelocity*0.1,
+              y: p.y + yVel*0.1,
+              rotation: (p.rotation+p.rotationVelocity)%360,
+              yVelocity: yVel
+            };
+          });
+          renderConfetti();
+          requestAnimationFrame(animate);
+        } else {
+          confettiRoot.innerHTML = '';
+        }
+      }
+      requestAnimationFrame(animate);
+    }
+    function renderConfetti() {
+      confettiRoot.innerHTML = confetti.map(piece =>
+        `<div class="confetti-piece" style="left:${piece.x}%;top:${piece.y}%;width:${piece.size}px;height:${piece.size}px;background:${piece.color};transform:rotate(${piece.rotation}deg);"></div>`
+      ).join('');
+    }
+
+    // ====== 팝업 ======
+    function showPopup() {
+      popupRoot.innerHTML = `
+        <div class="popup-bg" onclick="popupRoot.innerHTML=''">
+          <div class="popup" onclick="event.stopPropagation();">
+            <div class="popup-title" style="font-size:1.1rem;font-weight:bold;margin-bottom:7px;">오늘의 점심 메뉴</div>
+            <div class="popup-menu">${selectedMenu}</div>
+            <div class="popup-desc" style="color:#718096;font-size:1rem;margin-bottom:13px;">맛있게 드세요!</div>
+            <button class="popup-btn" onclick="popupRoot.innerHTML=''">확인</button>
+          </div>
+        </div>
+      `;
+    }
+
+    // ====== 초기 렌더 및 이벤트 ======
+    function init() {
+      loadMenus();
+      renderWheel();
+      rouletteRoot.style.transform = `rotate(${rotation}deg)`;
+
+      addBtn.onclick = addMenu;
+      addInput.onkeydown = (e)=>{ if(e.key==='Enter') addMenu(); }
+      spinBtn.onclick = spinRoulette;
+      durationRange.oninput = (e)=>{
+        spinDuration = parseInt(e.target.value);
+        durationLabel.textContent = `${spinDuration}초`;
+      };
+
+      // 모바일 입력창 포커스 시 자동 스크롤
+      addInput.onfocus = ()=>{
+        setTimeout(()=>{
+          addInput.scrollIntoView({behavior:'smooth',block:'center'});
+        }, 270);
+      };
+      // 반응형 리사이즈
+      window.addEventListener('resize', ()=>setTimeout(()=>{renderWheel();rouletteRoot.style.transform=`rotate(${rotation}deg)`;},80));
+      window.addEventListener('orientationchange', ()=>setTimeout(()=>{renderWheel();rouletteRoot.style.transform=`rotate(${rotation}deg)`;},180));
+    }
+
+    document.addEventListener('DOMContentLoaded',init);
+  </script>
+</body>
+</html>
