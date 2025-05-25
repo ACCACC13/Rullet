@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>점심 룰렛</title>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: #181c24;
+    }
+    body {
+      min-height: 100vh;
+      color: #fff;
+      font-family: 'Pretendard', 'Arial', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+    }
+    h1 {
+      margin-top: 24px;
+      font-size: 1.6em;
+      text-align: center;
+    }
+    #controls {
+      margin-top: 10px;
+      display: flex;
+      gap: 6px;
+      width: 100%;
+      max-width: 330px;
+      justify-content: center;
+    }
+    #menuInput {
+      padding: 10px;
+      border-radius: 6px;
+      border: none;
+      font-size: 1em;
+      width: 140px;
+    }
+    #addBtn, .btn {
+      padding: 10px 14px;
+      background: #36A2EB;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 1em;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    #addBtn:active, .btn:active { background: #2582BA; }
+    #wheel {
+      margin-top: 16px;
+      background: transparent;
+      border-radius: 50%;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.22);
+      display: block;
+      width: 95vw;
+      max-width: 360px;
+      height: 95vw;
+      max-height: 360px;
+      touch-action: manipulation;
+    }
+    .btn {
+      margin-top: 20px;
+      padding: 14px 0;
+      border-radius: 14px;
+      font-size: 1.15em;
+      width: 90vw;
+      max-width: 340px;
+      font-weight: bold;
+      box-shadow: 0 2px 12px rgba(60,140,255,0.09);
+    }
+    /* 팝업 반응형 */
+    .popup {
+      position: fixed;
+      left: 50%;
+      top: 38%;
+      transform: translate(-50%,-50%);
+      background: #fff;
+      color: #222;
+      padding: 18px 15px;
+      border-radius: 12px;
+      font-size: 1.2em;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.17);
+      z-index: 10001;
+      max-width: 80vw;
+      text-align: center;
+      word-break: keep-all;
+      user-select: text;
+    }
+    @media (max-width: 500px) {
+      h1 { font-size: 1.25em; }
+      #menuInput, #addBtn, .btn { font-size: 0.98em; }
+      .popup { font-size: 1em; }
+    }
+  </style>
+</head>
+<body>
+  <h1>오늘의 점심 뭐먹지?</h1>
+  <div id="controls">
+    <input id="menuInput" type="text" placeholder="새 메뉴 입력" autocapitalize="off" autocomplete="off" autocorrect="off">
+    <button id="addBtn">추가</button>
+  </div>
+  <canvas id="wheel" width="360" height="360"></canvas>
+  <button class="btn" id="spinBtn">돌리기!</button>
+
+  <!-- GSAP CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+  <script>
+    const defaultMenus = ["비빔밥","김치찌개","된장찌개","불고기","짜장면","짬뽕","초밥","라멘"];
+    const colors = ["#FF6384","#36A2EB","#FFCE56","#4BC0C0","#9966FF","#FF9F40","#7CFC00","#FF6347"];
+    const canvas = document.getElementById('wheel');
+    const ctx = canvas.getContext('2d');
+    const spinBtn = document.getElementById('spinBtn');
+    const addBtn = document.getElementById('addBtn');
+    const menuInput = document.getElementById('menuInput');
+
+    let wheelSize = Math.min(window.innerWidth, 360);
+    canvas.width = canvas.height = wheelSize;
+    let radius = canvas.width / 2;
+
+    function resizeCanvas() {
+      let newSize = Math.min(window.innerWidth * 0.95, 360);
+      canvas.width = canvas.height = newSize;
+      radius = newSize / 2;
+      drawWheel();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    function loadMenus() {
+      const saved = localStorage.getItem('menus');
+      if (saved) {
+        try { return JSON.parse(saved); } catch { return defaultMenus.slice(); }
+      }
+      return defaultMenus.slice();
+    }
+    function saveMenus() {
+      localStorage.setItem('menus', JSON.stringify(menus));
+    }
+
+    let menus = loadMenus();
+    let currentRotation = 0;
+    let spinning = false;
+
+    addBtn.addEventListener('click', () => {
+      const val = menuInput.value.trim();
+      if (!val) return;
+      menus.push(val);
+      menuInput.value = '';
+      saveMenus();
+      drawWheel();
+    });
+    canvas.addEventListener('click', e => {
+      if (spinning || !menus.length) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left - radius;
+      const y = e.clientY - rect.top - radius;
+      if (Math.hypot(x,y) > radius - 6) return;
+      let ang = Math.atan2(y, x);
+      if (ang < 0) ang += 2 * Math.PI;
+      ang = (ang + Math.PI/2) % (2 * Math.PI);
+      const offset = (currentRotation % 360) * Math.PI/180;
+      ang = (ang - offset + 2 * Math.PI) % (2 * Math.PI);
+      const slice = 2 * Math.PI / menus.length;
+      const idx = Math.floor(ang / slice);
+      if (idx >= 0 && idx < menus.length) {
+        menus.splice(idx,1);
+        saveMenus();
+        drawWheel();
+      }
+    });
+
+    function drawArrow() {
+      ctx.save();
+      ctx.beginPath(); ctx.moveTo(radius,10);
+      ctx.lineTo(radius-16,38); ctx.lineTo(radius+16,38);
+      ctx.closePath(); ctx.fillStyle='#fff';
+      ctx.shadowColor='#333';ctx.shadowBlur=4;ctx.fill();
+      ctx.restore();
+    }
+
+    function drawWheel() {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      if (!menus.length) {
+        ctx.save(); ctx.font='bold 24px Pretendard, Arial';
+        ctx.fillStyle='#fff';ctx.textAlign='center';
+        ctx.textBaseline='middle';
+        ctx.fillText('메뉴가 없습니다',radius,radius);
+        ctx.restore(); return;
+      }
+      const slice = 2 * Math.PI / menus.length;
+      menus.forEach((m,i)=>{
+        const start = currentRotation*Math.PI/180 + i*slice;
+        const end = start + slice;
+        ctx.beginPath(); ctx.moveTo(radius,radius);
+        ctx.arc(radius,radius,radius-6,start,end);
+        ctx.fillStyle = colors[i%colors.length]; ctx.fill();
+        ctx.strokeStyle='#222';ctx.lineWidth=3;ctx.stroke();
+        ctx.save(); ctx.translate(radius,radius);
+        ctx.rotate(start+slice/2);
+        ctx.fillStyle='#fff';ctx.font=`bold ${Math.max(14,Math.floor(radius/11))}px Pretendard, Arial`;
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.shadowColor='#222';ctx.shadowBlur=8;
+        ctx.fillText(m,radius*0.65,0);
+        ctx.restore();
+      });
+      drawArrow();
+    }
+
+    drawWheel();
+
+    spinBtn.addEventListener('click',() => {
+      if (spinning||!menus.length) return;
+      spinning = true;
+      const sliceDeg = 360 / menus.length;
+      const rounds = 5 + Math.random()*2;
+      const randIdx = Math.floor(Math.random()*menus.length);
+      const target = rounds*360 - (randIdx*sliceDeg) - sliceDeg/2;
+      gsap.to({r:currentRotation},{r:currentRotation+target,duration:4,ease:'power3.out',
+        onUpdate(){currentRotation=this.targets()[0].r;drawWheel();},
+        onComplete(){
+          spinning=false; currentRotation%=360;
+          const sliceCount = menus.length;
+          const sliceDeg = 360 / sliceCount;
+          let deg = (360 - (currentRotation % 360) + 90) % 360; // 12시 보정
+          let idx = Math.floor(deg / sliceDeg) % sliceCount;
+          if (idx < 0) idx += sliceCount;
+          if (idx >= sliceCount) idx = 0;
+          const sel = menus[idx];
+          // 반응형 팝업
+          const pop = document.createElement('div');
+          pop.className = 'popup';
+          pop.innerText = `🔥 오늘의 점심은 "${sel}"! 🔥`;
+          document.body.appendChild(pop);
+          setTimeout(()=>document.body.removeChild(pop),15000);
+          confetti({particleCount:200,spread:60,origin:{y:0.3}});
+          saveMenus();
+        }
+      });
+    });
+
+    // 첫 진입시 canvas 사이즈 조정
+    resizeCanvas();
+  </script>
+</body>
+</html>
