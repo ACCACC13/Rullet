@@ -227,12 +227,12 @@
           spinning=false; currentRotation%=360;
           const sliceCount = menus.length;
           const sliceDeg = 360 / sliceCount;
-          let deg = (360 - (currentRotation % 360) + 90) % 360; // 12시 보정
+          // 12시 방향을 정확히 맞추기 위해 270도 보정
+          let deg = (270 - (currentRotation % 360) + 360) % 360;
           let idx = Math.floor(deg / sliceDeg) % sliceCount;
           if (idx < 0) idx += sliceCount;
           if (idx >= sliceCount) idx = 0;
           const sel = menus[idx];
-          // 반응형 팝업
           const pop = document.createElement('div');
           pop.className = 'popup';
           pop.innerText = `🔥 오늘의 점심은 "${sel}"! 🔥`;
@@ -244,7 +244,6 @@
       });
     });
 
-    // 첫 진입시 canvas 사이즈 조정
     resizeCanvas();
   </script>
 </body>
