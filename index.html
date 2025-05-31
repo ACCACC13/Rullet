@@ -2,8 +2,31 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>점심 룰렛</title>
+
+  <!-- PWA: Manifest -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#181c24">
+
+  <!-- 파비콘(Favicon) -->
+  <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
+
+  <!-- Open Graph 메타 태그 -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="점심 룰렛 - 오늘의 점심 뭐먹지?">
+  <meta property="og:description" content="룰렛을 돌려서 오늘 점심 메뉴를 추천받아보세요!">
+  <meta property="og:image" content="og_image.png">
+  <meta property="og:url" content="https://{username}.github.io/Rullet/">
+  <meta property="og:site_name" content="점심 룰렛">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="점심 룰렛 - 오늘의 점심 뭐먹지?">
+  <meta name="twitter:description" content="룰렛을 돌려서 오늘 점심 메뉴를 추천받아보세요!">
+  <meta name="twitter:image" content="og_image.png">
+
+  <!-- 내부 CSS (필요 시 외부 CSS 파일로 분리 가능) -->
   <style>
     html, body {
       height: 100%;
@@ -111,22 +134,32 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
   <!-- Canvas Confetti -->
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+  <!-- PWA: Service Worker 등록 -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('sw.js')
+          .then(reg => console.log('ServiceWorker 등록 성공:', reg.scope))
+          .catch(err => console.log('ServiceWorker 등록 실패:', err));
+      });
+    }
+  </script>
   <script>
     const defaultMenus = ["비빔밥","김치찌개","된장찌개","불고기","짜장면","짬뽕","초밥","라멘"];
     const colors = ["#FF6384","#36A2EB","#FFCE56","#4BC0C0","#9966FF","#FF9F40","#7CFC00","#FF6347"];
-    const canvas = document.getElementById('wheel');
-    const ctx = canvas.getContext('2d');
+    const canvasEl = document.getElementById('wheel');
+    const ctx = canvasEl.getContext('2d');
     const spinBtn = document.getElementById('spinBtn');
     const addBtn = document.getElementById('addBtn');
     const menuInput = document.getElementById('menuInput');
 
     let wheelSize = Math.min(window.innerWidth, 360);
-    canvas.width = canvas.height = wheelSize;
-    let radius = canvas.width / 2;
+    canvasEl.width = canvasEl.height = wheelSize;
+    let radius = wheelSize / 2;
 
     function resizeCanvas() {
       let newSize = Math.min(window.innerWidth * 0.95, 360);
-      canvas.width = canvas.height = newSize;
+      canvasEl.width = canvasEl.height = newSize;
       radius = newSize / 2;
       drawWheel();
     }
@@ -155,12 +188,13 @@
       saveMenus();
       drawWheel();
     });
-    canvas.addEventListener('click', e => {
+    canvasEl.addEventListener('click', e => {
       if (spinning || !menus.length) return;
-      const rect = canvas.getBoundingClientRect();
+      const rect = canvasEl.getBoundingClientRect();
       const x = e.clientX - rect.left - radius;
       const y = e.clientY - rect.top - radius;
-      if (Math.hypot(x,y) > radius - 6) return;
+      const arcRadius = Math.max(radius - 6, 0);
+      if (Math.hypot(x,y) > arcRadius) return;
       let ang = Math.atan2(y, x);
       if (ang < 0) ang += 2 * Math.PI;
       ang = (ang + Math.PI/2) % (2 * Math.PI);
@@ -185,7 +219,7 @@
     }
 
     function drawWheel() {
-      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.clearRect(0,0,canvasEl.width,canvasEl.height);
       if (!menus.length) {
         ctx.save(); ctx.font='bold 24px Pretendard, Arial';
         ctx.fillStyle='#fff';ctx.textAlign='center';
@@ -197,16 +231,18 @@
       menus.forEach((m,i)=>{
         const start = currentRotation*Math.PI/180 + i*slice;
         const end = start + slice;
+        const arcRadius = Math.max(radius - 6, 0);
         ctx.beginPath(); ctx.moveTo(radius,radius);
-        ctx.arc(radius,radius,radius-6,start,end);
+        ctx.arc(radius,radius,arcRadius,start,end);
         ctx.fillStyle = colors[i%colors.length]; ctx.fill();
-        ctx.strokeStyle='#222';ctx.lineWidth=3;ctx.stroke();
+        ctx.strokeStyle='#222';ctx.lineWidth=3;
+        if (arcRadius > 0) ctx.stroke();
         ctx.save(); ctx.translate(radius,radius);
         ctx.rotate(start+slice/2);
         ctx.fillStyle='#fff';ctx.font=`bold ${Math.max(14,Math.floor(radius/11))}px Pretendard, Arial`;
         ctx.textAlign='center';ctx.textBaseline='middle';
         ctx.shadowColor='#222';ctx.shadowBlur=8;
-        ctx.fillText(m,radius*0.65,0);
+        ctx.fillText(m,arcRadius * 0.7,0);
         ctx.restore();
       });
       drawArrow();
@@ -217,25 +253,23 @@
     spinBtn.addEventListener('click',() => {
       if (spinning||!menus.length) return;
       spinning = true;
-      const sliceDeg = 360 / menus.length;
+      const sliceCount = menus.length;
+      const sliceDeg = 360 / sliceCount;
       const rounds = 5 + Math.random()*2;
-      const randIdx = Math.floor(Math.random()*menus.length);
+      const randIdx = Math.floor(Math.random()*sliceCount);
       const target = rounds*360 - (randIdx*sliceDeg) - sliceDeg/2;
       gsap.to({r:currentRotation},{r:currentRotation+target,duration:4,ease:'power3.out',
         onUpdate(){currentRotation=this.targets()[0].r;drawWheel();},
         onComplete(){
           spinning=false; currentRotation%=360;
-          const sliceCount = menus.length;
-          const sliceDeg = 360 / sliceCount;
-          // 12시 방향을 정확히 맞추기 위해 270도 보정
-          let deg = (270 - (currentRotation % 360) + 360) % 360;
-          let idx = Math.floor(deg / sliceDeg) % sliceCount;
+          const arcDeg = (270 - (currentRotation % 360) + 360) % 360;
+          let idx = Math.floor(arcDeg / sliceDeg) % sliceCount;
           if (idx < 0) idx += sliceCount;
           if (idx >= sliceCount) idx = 0;
           const sel = menus[idx];
           const pop = document.createElement('div');
           pop.className = 'popup';
-          pop.innerText = `🔥 오늘의 점심은 "${sel}"! 🔥`;
+          pop.innerText = `🔥 오늘의 점심은 \"${sel}\"! 🔥`;
           document.body.appendChild(pop);
           setTimeout(()=>document.body.removeChild(pop),15000);
           confetti({particleCount:200,spread:60,origin:{y:0.3}});
